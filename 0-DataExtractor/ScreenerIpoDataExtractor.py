@@ -26,9 +26,43 @@ def format_date(date_str):
     except:
         return date_str.strip()
 
-for page in range(1, 11):  # Pages 1 to 10
+def get_last_page():
+    url = base_url.format(1)
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # Adjust this selector if the pagination uses a different tag/class
+    pagination = soup.find("div", class_="pagination")
+    if not pagination:
+        print("No pagination found, defaulting to 1 page")
+        return 1
+
+    page_numbers = []
+    for a in pagination.find_all("a"):
+        href = a.get('href', '')
+        text = a.get_text(strip=True)
+
+        if "Next" in text:
+            continue
+
+        match = re.search(r'page=(\d+)', href)
+        if match:
+            page_numbers.append(int(match.group(1)))
+
+    if page_numbers:
+        last_page = max(page_numbers)
+        print(f"Detected last page: {last_page}")
+        return last_page
+    else:
+        print("No page numbers found, defaulting to 1 page")
+        return 1
+
+last_page = get_last_page()
+
+for page in range(1, last_page + 1):
     url = base_url.format(page)
-    print(f"Fetching page {page}...")
+    print(f"Fetching page {page} of {last_page}...")
+    print(f"URL {url}")
 
     response = requests.get(url, headers=headers)
     soup = BeautifulSoup(response.text, "html.parser")
@@ -38,7 +72,7 @@ for page in range(1, 11):  # Pages 1 to 10
         print(f"No table found on page {page}")
         continue
 
-    rows = table.find_all("tr")[1:]
+    rows = table.find_all("tr")[1:]  # skip header
     for row in rows:
         cols = row.find_all("td")
         if len(cols) >= 6:
@@ -83,14 +117,12 @@ os.makedirs(output_dir, exist_ok=True)
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 df = pd.DataFrame(ipo_data)
 
-# Save all IPOs to Excel
 def save_excel_with_hyperlinks(df_input, path, sheet_name="Sheet1"):
     df_to_export = df_input.drop(columns=["IPO Price Float", "Current Price Float"])
     wb = Workbook()
     ws = wb.active
     ws.title = sheet_name
 
-    # Write header
     ws.append(df_to_export.columns.tolist())
 
     for row in df_to_export.itertuples(index=False):
@@ -109,19 +141,15 @@ all_ipo_filename = os.path.join(output_dir, f"screener_ipo_data_{timestamp}.xlsx
 save_excel_with_hyperlinks(df, all_ipo_filename, "All IPOs")
 print(f"Saved all IPO data to {all_ipo_filename}")
 
-# Save filtered data with 4 sheets in one Excel
-from openpyxl import Workbook
-
 filtered_filename = os.path.join(output_dir, f"ipo_filtered_data_{timestamp}.xlsx")
 wb = Workbook()
 sheet_labels = [
     ("≥ 1x IPO Price", 1.0),
-    ("≥ 1.5x IPO Price", 1.5),
-    ("≥ 2x IPO Price", 2.0),
-    ("≥ 2.5x IPO Price", 2.5),
+    (f"≥ 50% from IPO Price", 1.5),
+    (f"≥ 100% from IPO Price", 2.0),
+    (f"≥ 150% from IPO Price", 2.5),
 ]
 
-# Remove default sheet
 wb.remove(wb.active)
 
 for sheet_name, factor in sheet_labels:
@@ -144,6 +172,5 @@ for sheet_name, factor in sheet_labels:
 wb.save(filtered_filename)
 print(f"Saved filtered IPO data to {filtered_filename}")
 
-# Open both Excel files
 subprocess.Popen(['start', '', all_ipo_filename], shell=True)
 subprocess.Popen(['start', '', filtered_filename], shell=True)
