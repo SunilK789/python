@@ -26,7 +26,7 @@ def format_date(date_str):
     except:
         return date_str.strip()
 
-for page in range(1, 5):  # Pages 1 to 10
+for page in range(1, 11):  # Pages 1 to 10
     url = base_url.format(page)
     print(f"Fetching page {page}...")
 
@@ -81,10 +81,9 @@ output_dir = os.path.join(base_dir, today_str)
 os.makedirs(output_dir, exist_ok=True)
 
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
 df = pd.DataFrame(ipo_data)
 
-# Save Excel file with clickable links (all IPOs)
+# Save all IPOs to Excel
 def save_excel_with_hyperlinks(df_input, path, sheet_name="Sheet1"):
     df_to_export = df_input.drop(columns=["IPO Price Float", "Current Price Float"])
     wb = Workbook()
@@ -106,17 +105,45 @@ def save_excel_with_hyperlinks(df_input, path, sheet_name="Sheet1"):
 
     wb.save(path)
 
-# File 1: All IPOs
 all_ipo_filename = os.path.join(output_dir, f"screener_ipo_data_{timestamp}.xlsx")
 save_excel_with_hyperlinks(df, all_ipo_filename, "All IPOs")
 print(f"Saved all IPO data to {all_ipo_filename}")
 
-# File 2: Filtered IPOs (Current Price ≥ 1.5× IPO Price)
-filtered_df = df[df["Current Price Float"] >= 1.5 * df["IPO Price Float"]].copy()
-filtered_ipo_filename = os.path.join(output_dir, f"ipo_filtered_data_{timestamp}.xlsx")
-save_excel_with_hyperlinks(filtered_df, filtered_ipo_filename, "Filtered IPOs")
-print(f"Saved filtered IPO data to {filtered_ipo_filename}")
+# Save filtered data with 4 sheets in one Excel
+from openpyxl import Workbook
+
+filtered_filename = os.path.join(output_dir, f"ipo_filtered_data_{timestamp}.xlsx")
+wb = Workbook()
+sheet_labels = [
+    ("≥ 1x IPO Price", 1.0),
+    ("≥ 1.5x IPO Price", 1.5),
+    ("≥ 2x IPO Price", 2.0),
+    ("≥ 2.5x IPO Price", 2.5),
+]
+
+# Remove default sheet
+wb.remove(wb.active)
+
+for sheet_name, factor in sheet_labels:
+    filtered_df = df[df["Current Price Float"] >= factor * df["IPO Price Float"]].copy()
+    df_to_export = filtered_df.drop(columns=["IPO Price Float", "Current Price Float"])
+
+    ws = wb.create_sheet(title=sheet_name)
+    ws.append(df_to_export.columns.tolist())
+
+    for row in df_to_export.itertuples(index=False):
+        excel_row = []
+        for i, value in enumerate(row):
+            col_name = df_to_export.columns[i]
+            if col_name == "Profile Link" and value:
+                excel_row.append(f'=HYPERLINK("{value}", "View")')
+            else:
+                excel_row.append(value)
+        ws.append(excel_row)
+
+wb.save(filtered_filename)
+print(f"Saved filtered IPO data to {filtered_filename}")
 
 # Open both Excel files
 subprocess.Popen(['start', '', all_ipo_filename], shell=True)
-subprocess.Popen(['start', '', filtered_ipo_filename], shell=True)
+subprocess.Popen(['start', '', filtered_filename], shell=True)
