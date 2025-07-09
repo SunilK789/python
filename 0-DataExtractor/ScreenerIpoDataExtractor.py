@@ -6,6 +6,7 @@ from datetime import datetime
 import re
 import os
 import subprocess
+from openpyxl import Workbook
 
 headers = {
     'User-Agent': 'Mozilla/5.0'
@@ -25,7 +26,7 @@ def format_date(date_str):
     except:
         return date_str.strip()
 
-for page in range(1, 11):  # Pages 1 to 10
+for page in range(1, 5):  # Pages 1 to 10
     url = base_url.format(page)
     print(f"Fetching page {page}...")
 
@@ -41,7 +42,11 @@ for page in range(1, 11):  # Pages 1 to 10
     for row in rows:
         cols = row.find_all("td")
         if len(cols) >= 6:
-            name = cols[0].find("a").text.strip() if cols[0].find("a") else cols[0].text.strip()
+            name_link_tag = cols[0].find("a")
+            name = name_link_tag.text.strip() if name_link_tag else cols[0].text.strip()
+            relative_url = name_link_tag['href'] if name_link_tag and 'href' in name_link_tag.attrs else ''
+            full_url = f"https://www.screener.in{relative_url}" if relative_url else ''
+
             list_date = format_date(cols[1].text.strip())
             ipo_price_str = extract_clean_text(cols[3])
             current_price_str = extract_clean_text(cols[4])
@@ -57,6 +62,7 @@ for page in range(1, 11):  # Pages 1 to 10
 
             ipo_data.append({
                 "Name": name,
+                "Profile Link": full_url,
                 "List Date": list_date,
                 "IPO MCap (Cr)": extract_clean_text(cols[2]),
                 "IPO Price": ipo_price_str,
@@ -76,23 +82,41 @@ os.makedirs(output_dir, exist_ok=True)
 
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-# Convert to DataFrame
 df = pd.DataFrame(ipo_data)
 
-# Save all data
-full_filename = os.path.join(output_dir, f"screener_ipo_data_{timestamp}.csv")
-df.drop(columns=["IPO Price Float", "Current Price Float"]).to_csv(full_filename, index=False)
-print(f"Saved all IPO data to {full_filename}")
+# Save Excel file with clickable links (all IPOs)
+def save_excel_with_hyperlinks(df_input, path, sheet_name="Sheet1"):
+    df_to_export = df_input.drop(columns=["IPO Price Float", "Current Price Float"])
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name
 
-# Filter: Current Price ≥ 1.5 × IPO Price
+    # Write header
+    ws.append(df_to_export.columns.tolist())
+
+    for row in df_to_export.itertuples(index=False):
+        excel_row = []
+        for i, value in enumerate(row):
+            col_name = df_to_export.columns[i]
+            if col_name == "Profile Link" and value:
+                excel_row.append(f'=HYPERLINK("{value}", "View")')
+            else:
+                excel_row.append(value)
+        ws.append(excel_row)
+
+    wb.save(path)
+
+# File 1: All IPOs
+all_ipo_filename = os.path.join(output_dir, f"screener_ipo_data_{timestamp}.xlsx")
+save_excel_with_hyperlinks(df, all_ipo_filename, "All IPOs")
+print(f"Saved all IPO data to {all_ipo_filename}")
+
+# File 2: Filtered IPOs (Current Price ≥ 1.5× IPO Price)
 filtered_df = df[df["Current Price Float"] >= 1.5 * df["IPO Price Float"]].copy()
-filtered_df.drop(columns=["IPO Price Float", "Current Price Float"], inplace=True)
+filtered_ipo_filename = os.path.join(output_dir, f"ipo_filtered_data_{timestamp}.xlsx")
+save_excel_with_hyperlinks(filtered_df, filtered_ipo_filename, "Filtered IPOs")
+print(f"Saved filtered IPO data to {filtered_ipo_filename}")
 
-# Save filtered data
-filtered_filename = os.path.join(output_dir, f"ipo_filtered_data_{timestamp}.csv")
-filtered_df.to_csv(filtered_filename, index=False)
-print(f"Saved filtered IPO data to {filtered_filename}")
-
-# Open both files
-subprocess.Popen(['start', '', full_filename], shell=True)
-subprocess.Popen(['start', '', filtered_filename], shell=True)
+# Open both Excel files
+subprocess.Popen(['start', '', all_ipo_filename], shell=True)
+subprocess.Popen(['start', '', filtered_ipo_filename], shell=True)
