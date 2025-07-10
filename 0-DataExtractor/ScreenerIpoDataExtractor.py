@@ -137,11 +137,11 @@ def save_excel_with_hyperlinks(df_input, path, sheet_name="Sheet1"):
 
     wb.save(path)
 
-all_ipo_filename = os.path.join(output_dir, f"screener_ipo_data_{timestamp}.xlsx")
+all_ipo_filename = os.path.join(output_dir, f"Last_3_years_ipo_data_{timestamp}.xlsx")
 save_excel_with_hyperlinks(df, all_ipo_filename, "All IPOs")
 print(f"Saved all IPO data to {all_ipo_filename}")
 
-filtered_filename = os.path.join(output_dir, f"ipo_filtered_data_{timestamp}.xlsx")
+filtered_filename = os.path.join(output_dir, f"IPO_filtered_data_{timestamp}.xlsx")
 wb = Workbook()
 sheet_labels = [
     ("≥ 1x IPO Price", 1.0),
@@ -172,5 +172,9 @@ for sheet_name, factor in sheet_labels:
 wb.save(filtered_filename)
 print(f"Saved filtered IPO data to {filtered_filename}")
 
-subprocess.Popen(['start', '', all_ipo_filename], shell=True)
-subprocess.Popen(['start', '', filtered_filename], shell=True)
+# Output file paths for Power Automate
+print(f"<OUTPUT_FILE_1_START>{all_ipo_filename}<OUTPUT_FILE_1_END>")
+print(f"<OUTPUT_FILE_2_START>{filtered_filename}<OUTPUT_FILE_2_END>")
+
+#subprocess.Popen(['start', '', all_ipo_filename], shell=True)
+#subprocess.Popen(['start', '', filtered_filename], shell=True)
